@@ -21,6 +21,29 @@ function assignBool(definedName, attributes, name, defaultValue) {
     definedName[name] = defaultValue;
   }
 }
+function containsCrossSheetReference(formula) {
+  if (typeof formula !== 'string') {
+    return false;
+  }
+  const crossSheetPattern = /(?:^|[^'"])'?[^'"]+'?!|^[^!'"]+!/;
+  return crossSheetPattern.test(formula);
+}
+function normalizeFormulaForComparison(formula) {
+  if (typeof formula !== 'string') {
+    return formula;
+  }
+  return formula.replace(/'([^']+)'!/g, '$1!');
+}
+function normaliseDataValidationForComparison(dataValidation) {
+  if (!dataValidation || !dataValidation.formulae) {
+    return dataValidation;
+  }
+  const normalised = {
+    ...dataValidation
+  };
+  normalised.formulae = normalised.formulae.map(f => normalizeFormulaForComparison(f));
+  return normalised;
+}
 function optimiseDataValidations(model) {
   // Squeeze alike data validations together into rectangular ranges
   // to reduce file size and speed up Excel load time
@@ -30,10 +53,15 @@ function optimiseDataValidations(model) {
     marked: false
   })).sort((a, b) => _.strcmp(a.address, b.address));
   const dvMap = _.keyBy(dvList, 'address');
-  const matchCol = (addr, height, col) => {
+  const matchCol = (addr, height, col, currentDataValidation) => {
+    const normalisedCurrent = normaliseDataValidationForComparison(currentDataValidation);
     for (let i = 0; i < height; i++) {
       const otherAddress = colCache.encodeAddress(addr.row + i, col);
-      if (!model[otherAddress] || !_.isEqual(model[addr.address], model[otherAddress])) {
+      if (!model[otherAddress]) {
+        return false;
+      }
+      const normalisedOther = normaliseDataValidationForComparison(model[otherAddress]);
+      if (!_.isEqual(normalisedCurrent, normalisedOther)) {
         return false;
       }
     }
@@ -53,7 +81,12 @@ function optimiseDataValidations(model) {
       // iterate downwards - finding matching cells
       let height = 1;
       let otherAddress = colCache.encodeAddress(addr.row + height, addr.col);
-      while (model[otherAddress] && _.isEqual(dv.dataValidation, model[otherAddress])) {
+      const normalisedDv = normaliseDataValidationForComparison(dv.dataValidation);
+      while (model[otherAddress]) {
+        const normalisedOther = normaliseDataValidationForComparison(model[otherAddress]);
+        if (!_.isEqual(normalisedDv, normalisedOther)) {
+          break;
+        }
         height++;
         otherAddress = colCache.encodeAddress(addr.row + height, addr.col);
       }
@@ -61,7 +94,7 @@ function optimiseDataValidations(model) {
       // iterate rightwards...
 
       let width = 1;
-      while (matchCol(addr, height, addr.col + width)) {
+      while (matchCol(addr, height, addr.col + width, dv.dataValidation)) {
         width++;
       }
 
@@ -220,19 +253,22 @@ class DataValidationsXform extends BaseXform {
       case 'formula2':
         {
           let formula = this._formula.join('');
-          switch (this._dataValidation.type) {
-            case 'whole':
-            case 'textLength':
-              formula = parseInt(formula, 10);
-              break;
-            case 'decimal':
-              formula = parseFloat(formula);
-              break;
-            case 'date':
-              formula = utils.excelToDate(parseFloat(formula));
-              break;
-            default:
-              break;
+          const hasCrossSheetRef = containsCrossSheetReference(formula);
+          if (!hasCrossSheetRef) {
+            switch (this._dataValidation.type) {
+              case 'whole':
+              case 'textLength':
+                formula = parseInt(formula, 10);
+                break;
+              case 'decimal':
+                formula = parseFloat(formula);
+                break;
+              case 'date':
+                formula = utils.excelToDate(parseFloat(formula));
+                break;
+              default:
+                break;
+            }
           }
           this._dataValidation.formulae.push(formula);
           this._formula = undefined;

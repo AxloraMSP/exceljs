@@ -404,13 +404,15 @@ class WorkSheetXform extends BaseXform {
           };
           const pageSetup = Object.assign(sheetProperties, this.map.pageSetup.model, this.map.printOptions.model);
           const conditionalFormattings = mergeConditionalFormattings(this.map.conditionalFormatting.model, this.map.extLst.model && this.map.extLst.model['x14:conditionalFormattings']);
+          const extDataValidations = this.map.extLst.model && this.map.extLst.model['x14:dataValidations'];
+          const dataValidations = extDataValidations ? Object.assign({}, this.map.dataValidations.model, extDataValidations) : this.map.dataValidations.model;
           this.model = {
             dimensions: this.map.dimension.model,
             cols: this.map.cols.model,
             rows: this.map.sheetData.model,
             mergeCells: this.map.mergeCells.model,
             hyperlinks: this.map.hyperlinks.model,
-            dataValidations: this.map.dataValidations.model,
+            dataValidations,
             properties,
             views: this.map.sheetViews.model,
             pageSetup,

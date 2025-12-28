@@ -3,11 +3,13 @@
 /* eslint-disable max-classes-per-file */
 const CompositeXform = require('../composite-xform');
 const ConditionalFormattingsExt = require('./cf-ext/conditional-formattings-ext-xform');
+const DataValidationsExt = require('./data-validations-ext-xform');
 class ExtXform extends CompositeXform {
   constructor() {
     super();
     this.map = {
-      'x14:conditionalFormattings': this.conditionalFormattings = new ConditionalFormattingsExt()
+      'x14:conditionalFormattings': this.conditionalFormattings = new ConditionalFormattingsExt(),
+      'x14:dataValidations': this.dataValidations = new DataValidationsExt()
     };
   }
   get tag() {
@@ -17,15 +19,19 @@ class ExtXform extends CompositeXform {
     return this.conditionalFormattings.hasContent(model.conditionalFormattings);
   }
   prepare(model, options) {
-    this.conditionalFormattings.prepare(model.conditionalFormattings, options);
+    if (model.conditionalFormattings) {
+      this.conditionalFormattings.prepare(model.conditionalFormattings, options);
+    }
   }
   render(xmlStream, model) {
-    xmlStream.openNode('ext', {
-      uri: '{78C0D931-6437-407d-A8EE-F0AAD7539E65}',
-      'xmlns:x14': 'http://schemas.microsoft.com/office/spreadsheetml/2009/9/main'
-    });
-    this.conditionalFormattings.render(xmlStream, model.conditionalFormattings);
-    xmlStream.closeNode();
+    if (model.conditionalFormattings && this.conditionalFormattings.hasContent(model.conditionalFormattings)) {
+      xmlStream.openNode('ext', {
+        uri: '{78C0D931-6437-407d-A8EE-F0AAD7539E65}',
+        'xmlns:x14': 'http://schemas.microsoft.com/office/spreadsheetml/2009/9/main'
+      });
+      this.conditionalFormattings.render(xmlStream, model.conditionalFormattings);
+      xmlStream.closeNode();
+    }
   }
   createNewModel() {
     return {};
